@@ -1,0 +1,74 @@
+$version="1.1"
+write-host "v$version"
+
+$string=""
+
+write-host "Starting date and time is: $((Get-Date).ToString())"
+$computers = Get-ADComputer -Filter * -Properties * #| Format-List name, ipv4*, oper*, DistinguishedName
+$Results = @()
+
+write-host "There are " $computers.Count " device on the domain."
+
+$i=0
+$computers | ForEach-Object {
+    $computer=$_.name
+    $Completed = ($i/$computers.Count) * 100
+    Write-Progress -Activity "Searching Events: $computer ..." -Status "Progress:" -PercentComplete $Completed
+
+    
+    #write-host "Testing device $computer "
+    try {
+        if(Test-Connection $computer -Quiet){
+            query user /server:$computer | ForEach-Object {
+                $string=$_
+                if ($string.Contains("Active")) {
+					$string=$string.Trim()
+                    $string=$string.Replace('Active','')
+                    $string=$string.Replace('none','')
+                    $string=$string.Replace('console','')
+                    $string=$( $string -Replace " *\d *\d*\/\d*\/\d* *\d*:\d* *$", "")
+                    $string=$( $string -Replace " *rdp-tcp#\d* *\d *$", "")
+                    $string=$( $string -Replace " *\d* *\d*:\d* *$", "")
+					$string=$string.Trim()
+                    
+                    #write-host "Found active user $string on pc $computer"
+                    $LoggedOnUser=$string
+                }
+            }
+
+
+            if ($LoggedOnUser) {
+                $Results += [PSCustomObject]@{
+                    ComputerName = $Computer
+                    LoggedOnUser = $LoggedOnUser
+                }
+            }
+            else {
+                $Results += [PSCustomObject]@{
+                    ComputerName = $Computer
+                    LoggedOnUser = "No user logged on"
+                }
+            }
+        }else{            
+            $Results += [PSCustomObject]@{
+                ComputerName = $Computer
+                LoggedOnUser = "Offline"
+            }
+        }
+    }catch{
+        # Handle errors (e.g., access denied, WMI issues)
+        $Results += [PSCustomObject]@{
+            ComputerName = $Computer
+            LoggedOnUser = "Error: $($_.Exception.Message)"
+        }
+    }
+    $i = $i+1
+}
+
+write-host "Finishing date and time is: $((Get-Date).ToString())"
+write-host  "`n`nSummery:`n"
+$Results | Format-Table -AutoSize
+
+pause
+pause
+pause
