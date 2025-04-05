@@ -88,7 +88,7 @@ $computers | ForEach-Object {
     $computer=$_.name
     #write-host "Checking device $computer"
         
-    $Completed = ($i/$computers2.Count) * 100
+    $Completed = ($i/$computers.Count) * 100
     Write-Progress -Activity "Getting users on $computer ..." -Status "Progress:" -PercentComplete $Completed
     
     try{
