@@ -1,55 +1,106 @@
-$version="1.1"
+$version="2.4"
 write-host "v$version"
+#need to work out queue/throttle
+
+Get-Job | Remove-Job #cleaning exisisting jobs in the session
 
 $string=""
 
 write-host "Starting date and time is: $((Get-Date).ToString())"
 $computers = Get-ADComputer -Filter * -Properties * #| Format-List name, ipv4*, oper*, DistinguishedName
 $Results = @()
+$onlinediveice = @()
+$computers2 = @()
 
 write-host "There are " $computers.Count " device on the domain."
+
+$TC={ param($computer)
+   if(Test-Connection $computer -Quiet){
+        return $computer
+    }else{
+        return $false
+    }
+}
 
 $i=0
 $computers | ForEach-Object {
     $computer=$_.name
     $Completed = ($i/$computers.Count) * 100
+    Write-Progress -Activity "Counting: $computer ..." -Status "Progress:" -PercentComplete $Completed
+    if($i -lt 10) {
+        $computers2+=$_
+    }
+    $i+=1
+}
+
+write-host "There are " $computers2.Count " device on the domain."
+
+
+$computers2 | ForEach-Object {
+    $computer=$_.name
+    $Completed = ($i/$computers.Count) * 100
     Write-Progress -Activity "Searching Events: $computer ..." -Status "Progress:" -PercentComplete $Completed
+    $job=Start-Job $TC -ArgumentList $computer
+}
 
+# Wait for it all to complete
+$totaljobs=Get-Job
+While (Get-Job -State "Running"){
+    $runningjobs=Get-Job -State "Running"
+    write-host "Running jobs: $($runningjobs.Count) of $($totaljobs.Count)"
+    Start-Sleep 5
+}
+
+#getting all the jobs result/return
+$onlinediveice=Get-Job | Receive-Job
+#write-host "recived jobs`n" $onlinediveice
+
+
+$i=0
+$computers2 | ForEach-Object {
+    $computer=$_.name
+    #write-host "Checking device $computer"
+        
+    $Completed = ($i/$computers2.Count) * 100
+    Write-Progress -Activity "Getting users on $computer ..." -Status "Progress:" -PercentComplete $Completed
     
-    #write-host "Testing device $computer "
-    try {
-        if(Test-Connection $computer -Quiet){
-            query user /server:$computer | ForEach-Object {
-                $string=$_
-                if ($string.Contains("Active")) {
-					$string=$string.Trim()
-                    $string=$string.Replace('Active','')
-                    $string=$string.Replace('none','')
-                    $string=$string.Replace('console','')
-                    $string=$( $string -Replace " *\d *\d*\/\d*\/\d* *\d*:\d* *$", "")
-                    $string=$( $string -Replace " *rdp-tcp#\d* *\d *$", "")
-                    $string=$( $string -Replace " *\d* *\d*:\d* *$", "")
-					$string=$string.Trim()
-                    
-                    #write-host "Found active user $string on pc $computer"
-                    $LoggedOnUser=$string
+    try{
+        if($onlinediveice.contains($computer)){
+            #write-host "Quering device $computer"
+
+            # 2>$null to silent error with the connection
+            $queryresult=query user /server:$computer 2>$null
+            if($queryresult.Count -gt 0){
+                $queryresult 2>$null | ForEach-Object {
+                    $string=$_
+                    if ($string.Contains("Active")) {
+					    $string=$string.Trim()
+                        $string=$string.Substring(0, [Math]::Min($string.Length, 20))
+					    $string=$string.Trim()                    
+                        #write-host "Found active user $string on pc $computer"
+                        $LoggedOnUser=$string
+                    }
+                }                
+
+                if ($LoggedOnUser) {
+                    $Results += [PSCustomObject]@{
+                        ComputerName = $Computer
+                        LoggedOnUser = $LoggedOnUser
+                    }
+                }else{
+                    $Results += [PSCustomObject]@{
+                        ComputerName = $Computer
+                        LoggedOnUser = "No user logged on"
+                    }
                 }
-            }
 
-
-            if ($LoggedOnUser) {
+            }else{
                 $Results += [PSCustomObject]@{
                     ComputerName = $Computer
-                    LoggedOnUser = $LoggedOnUser
+                    LoggedOnUser = "On-line but could not connect/No user logged on"
                 }
-            }
-            else {
-                $Results += [PSCustomObject]@{
-                    ComputerName = $Computer
-                    LoggedOnUser = "No user logged on"
-                }
-            }
-        }else{            
+            }			
+        }else{ 		
             $Results += [PSCustomObject]@{
                 ComputerName = $Computer
                 LoggedOnUser = "Offline"
@@ -66,7 +117,7 @@ $computers | ForEach-Object {
 }
 
 write-host "Finishing date and time is: $((Get-Date).ToString())"
-write-host  "`n`nSummery:`n"
+write-host  "`nSummery:"
 $Results | Format-Table -AutoSize
 
 pause
