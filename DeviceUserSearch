@@ -2,7 +2,7 @@ $version="2.5"
 write-host "v$version"
 #need to work out queue/throttle
 
-Get-Job | Remove-Job #cleaning exisisting jobs in the session
+Get-Job | Remove-Job #cleaning existing jobs in the session
 
 $string=""
 
