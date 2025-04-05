@@ -1,4 +1,4 @@
-$version="2.6"
+$version="2.8"
 write-host "v$version"
 #need to work out queue/throttle
 
@@ -40,14 +40,21 @@ Write-Progress -Completed
 
 write-host "There are " $computers.Count " device on the domain."
 
-$i=0
+
+if($computers.Count -gt 50){
+	$answer = Read-Host "There are a lot of devices it may require a lof of system resources (RAM and CPU). Do you want to continue? ([y]/n)"
+	write-host $answer
+    if($answer -eq "n" -or $answer -eq "no"){
+		exit 0
+	}
+}
+
+write-host "Starting the checks..."
 $computers | ForEach-Object {
     $computer=$_.name
-    $Completed = ($i/$computers.Count) * 100
-    Write-Progress -Activity "Searching: $computer ..." -Status "Progress:" -PercentComplete $Completed
-    $job=Start-Job $TC -ArgumentList $computer 
+	$jobs=Start-Job $TC -ArgumentList $computer 
 }
-Write-Progress -Completed
+
 
 # Wait for it all to complete
 $totaljobs=Get-Job
@@ -82,15 +89,16 @@ write-host  -NoNewLine "`rDone!                                                 
 $onlinediveice=Get-Job | Receive-Job
 #write-host "recived jobs`n" $onlinediveice
 
+write-host "`n`n Starting to ghet the users...`n"
 
 $i=0
 $computers | ForEach-Object {
     $computer=$_.name
-    #write-host "Checking device $computer"
+    write-host -NoNewLine"`rChecking device $computer."
         
     $Completed = ($i/$computers.Count) * 100
     Write-Progress -Activity "Getting users on $computer ..." -Status "Progress:" -PercentComplete $Completed
-    
+	
     try{
         if($onlinediveice.contains($computer)){
             #write-host "Quering device $computer"
