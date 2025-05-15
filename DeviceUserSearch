@@ -1,8 +1,5 @@
 $version="2.9"
 write-host "v$version"
-#need to work out queue/throttle
-
-Get-Job | Remove-Job #cleaning existing jobs in the session
 
 $string=""
 
@@ -11,9 +8,7 @@ $computers = Get-ADComputer -Filter * -Properties * #| Format-List name, ipv4*, 
 $Results = @()
 $onlinediveice = @()
 
-
 write-host "There are " $computers.Count " device on the domain."
-
 
 if($computers.Count -gt 50){
 	$answer = Read-Host "There are a lot of devices it may require a lof of time. Do you want to continue? ([y]/n)"
